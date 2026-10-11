@@ -357,6 +357,32 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
     });
   }
 
+  Future<void> _showCasting() async {
+    final choice = await KazumiDialog.show<String>(builder: (context) => SimpleDialog(
+      title: const Text('投屏'), children: [
+        if (defaultTargetPlatform == TargetPlatform.iOS)
+          SimpleDialogOption(onPressed: () => Navigator.of(context).pop('airplay'),
+            child: const ListTile(leading: Icon(Icons.airplay), title: Text('AirPlay'),
+              subtitle: Text('打开系统播放器，再点击 AirPlay 选择电视'))),
+        SimpleDialogOption(onPressed: () => Navigator.of(context).pop('dlna'),
+          child: const ListTile(leading: Icon(Icons.cast), title: Text('DLNA 电视投屏'),
+            subtitle: Text('搜索同一 Wi-Fi 下的电视或盒子'))),
+      ],
+    ));
+    if (!mounted || choice == null) return;
+    if (choice == 'airplay') {
+      await widget.enterAndroidPictureInPicture();
+      return;
+    }
+    final wasPlaying = playerController.playback.playing;
+    final player = playerController.playback.mediaPlayer;
+    await playerController.pause();
+    final connected = await RemotePlay().castVideo(playerController.videoUrl, playerController.referer);
+    if (mounted && !connected && wasPlaying && identical(player, playerController.playback.mediaPlayer)) {
+      await playerController.play();
+    }
+  }
+
   Widget _forwardButton() {
     return Tooltip(
       message: '快进${playerController.playback.buttonSkipTime}秒，长按修改时间',
@@ -798,6 +824,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
               if (defaultTargetPlatform == TargetPlatform.iOS && widget.fillsWindow)
                 const PlayerDeviceStatus(),
               _forwardButton(),
+              IconButton(onPressed: _showCasting, tooltip: '投屏',
+                icon: const Icon(Icons.cast_rounded, color: Colors.white)),
               if (_desktop)
                 PlayerScreenshotControls(
                   controller: playerController.screenshots,
@@ -869,21 +897,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                     onPressed: widget.showVideoInfo,
                     label: '视频详情',
                   ),
-                  KazumiMenuItem(
-                    onPressed: () {
-                      final needRestart = playerController.playback.playing;
-                      playerController.pause();
-                      RemotePlay()
-                          .castVideo(playerController.videoUrl,
-                              videoPageController.currentPlugin.referer)
-                          .whenComplete(() {
-                        if (mounted && needRestart) {
-                          playerController.play();
-                        }
-                      });
-                    },
-                    label: '远程投屏',
-                  ),
+                  KazumiMenuItem(onPressed: _showCasting, label: '投屏'),
                   KazumiMenuItem(
                     onPressed: playerController.launchExternalPlayer,
                     label: '外部播放',

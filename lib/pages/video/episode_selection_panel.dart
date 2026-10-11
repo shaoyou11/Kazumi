@@ -116,7 +116,7 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -650,7 +650,7 @@ class _EpisodeRowState extends State<_EpisodeRow>
                 constraints: const BoxConstraints(minHeight: 56),
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,

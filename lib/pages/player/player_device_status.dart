@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -54,15 +55,23 @@ class _PlayerDeviceStatusState extends State<PlayerDeviceStatus> with WidgetsBin
   @override
   Widget build(BuildContext context) {
     final time = '${_now.hour.toString().padLeft(2, '0')}:${_now.minute.toString().padLeft(2, '0')}';
-    return Semantics(label: '时间 $time，电量 ${_battery ?? '未知'}', child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(time, style: const TextStyle(color: Colors.white, fontSize: 13)),
-        const SizedBox(width: 8),
-        Icon(_charging ? Icons.battery_charging_full : Icons.battery_std,
-          size: 17, color: (_battery ?? 100) <= 20 ? Colors.amber : Colors.white),
-        Text(_battery == null || _battery! < 0 ? '—' : '$_battery%', style: const TextStyle(color: Colors.white, fontSize: 12)),
-      ]),
-    ));
+    const textStyle = TextStyle(color: Colors.white, fontSize: 12,
+        height: 1, fontWeight: FontWeight.w600,
+        fontFeatures: [FontFeature.tabularFigures()]);
+    return Semantics(label: '时间 $time，电量 ${_battery ?? '未知'}',
+      child: SizedBox(height: 44, child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Text(time, style: textStyle),
+          const SizedBox(width: 10),
+          RotatedBox(quarterTurns: 1,
+            child: Icon(_charging ? Icons.battery_charging_full : Icons.battery_std,
+              size: 17, color: (_battery ?? 100) <= 20 ? Colors.amber : Colors.white)),
+          const SizedBox(width: 3),
+          Text(_battery == null || _battery! < 0 ? '—' : '$_battery%', style: textStyle),
+        ]),
+      )),
+    );
   }
 }

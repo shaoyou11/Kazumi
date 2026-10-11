@@ -148,6 +148,7 @@ class _PlayerItemState extends State<PlayerItem>
           .invokeMapMethod<String, dynamic>('openPictureInPicture', {
         'url': playerController.videoUrl,
         'referer': playerController.referer,
+        'headers': playerController.playbackHeaders,
         'position': playerController.playback.currentPosition.inMilliseconds / 1000.0,
         'rate': playerController.playback.playerSpeed,
         'playing': wasPlaying,
@@ -166,7 +167,7 @@ class _PlayerItemState extends State<PlayerItem>
     } on PlatformException catch (_) {
       if (mounted && identical(player, playerController.playback.mediaPlayer)) {
         if (wasPlaying) await playerController.play(enableSync: false);
-        KazumiDialog.showToast(message: '此片源无法使用系统画中画，已恢复原播放器');
+        KazumiDialog.showToast(message: '此片源无法使用系统播放 / AirPlay，已恢复原播放器');
       }
     } finally {
       _iosNativePlayback = false;
@@ -553,7 +554,7 @@ class _PlayerItemState extends State<PlayerItem>
       if (direction != 0 && seconds > 0) {
         unawaited(_seekWithPlayerTimer(() => playerController.seekBy(Duration(seconds: direction * seconds))));
         _seekFeedbackTimer?.cancel();
-        setState(() { _seekDirection = direction; _seekFeedback = '${direction > 0 ? '快进' : '快退'} $seconds 秒'; });
+        setState(() { _seekDirection = direction; _seekFeedback = '00:${seconds.toString().padLeft(2, '0')}'; });
         _seekFeedbackTimer = Timer(const Duration(milliseconds: 850), () {
           if (mounted) setState(() => _seekFeedback = null);
         });
@@ -1590,12 +1591,16 @@ class _PlayerItemState extends State<PlayerItem>
                     ),
                     if (_seekFeedback != null)
                       Positioned.fill(child: IgnorePointer(child: Align(
-                        alignment: _seekDirection < 0 ? Alignment.centerLeft : Alignment.centerRight,
+                        alignment: Alignment.topCenter,
                         child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 28),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(24)),
-                          child: Text(_seekFeedback!, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                          margin: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 46),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white24)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(_seekDirection < 0 ? Icons.fast_rewind_rounded : Icons.fast_forward_rounded, color: Colors.white, size: 20),
+                            const SizedBox(width: 6),
+                            Text(_seekFeedback!, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.2, fontWeight: FontWeight.w600)),
+                          ]),
                         ),
                       ))),
                     (Platform.isAndroid &&

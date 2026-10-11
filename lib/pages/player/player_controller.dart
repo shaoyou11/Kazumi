@@ -163,6 +163,8 @@ class PlayerController implements Disposable {
     unawaited(GStorage.putSetting<double>(SettingsKeys.defaultVolume, clamped));
   }
 
+  Map<String, String> playbackHeaders = const {};
+
   Future<bool> init(PlaybackInitParams params) async {
     if (_initializations.isClosed) {
       return false;
@@ -176,6 +178,7 @@ class PlayerController implements Disposable {
     currentDanmakuEpisodeNumber = params.danmakuEpisodeNumber;
     currentRoad = params.currentRoad;
     referer = params.referer;
+    playbackHeaders = Map.unmodifiable(params.httpHeaders);
 
     KazumiLogger().i(
         'PlayerController: ${params.isLocalPlayback ? "local" : "online"} playback, url: ${params.videoUrl}');

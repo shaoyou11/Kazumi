@@ -25,7 +25,6 @@ import AVKit
                 result(["battery": Int((device.batteryLevel * 100).rounded()), "charging": device.batteryState == .charging || device.batteryState == .full])
             } else if call.method == "openPictureInPicture" {
                 guard self.kazumiTPlayer == nil,
-                      AVPictureInPictureController.isPictureInPictureSupported(),
                       let args = call.arguments as? [String: Any],
                       let text = args["url"] as? String, let url = URL(string: text),
                       ["http", "https", "file"].contains(url.scheme?.lowercased() ?? ""),
@@ -39,6 +38,7 @@ import AVKit
                 let controller = KazumiTSystemPlayer()
                 self.kazumiTPlayer = controller
                 controller.configure(url: url, referer: args["referer"] as? String ?? "",
+                                     headers: args["headers"] as? [String: String] ?? [:],
                                      position: (args["position"] as? NSNumber)?.doubleValue ?? 0,
                                      rate: (args["rate"] as? NSNumber)?.floatValue ?? 1,
                                      playing: args["playing"] as? Bool ?? true) { [weak self] position, playing, error in
@@ -140,20 +140,26 @@ private final class KazumiTSystemPlayer: AVPlayerViewController, AVPlayerViewCon
     private var desiredRate: Float = 1
     private var shouldPlay = true
 
-    func configure(url: URL, referer: String, position: Double, rate: Float,
+    func configure(url: URL, referer: String, headers: [String: String], position: Double, rate: Float,
                    playing: Bool, completion: @escaping (Double, Bool, String?) -> Void) {
         self.completion = completion
         targetPosition = position.isFinite ? max(0, position) : 0
         desiredRate = max(0.25, min(3, rate))
         shouldPlay = playing
-        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": ["Referer": referer]])
+        var playbackHeaders = headers
+        if !referer.isEmpty && !headers.keys.contains(where: { $0.lowercased() == "referer" }) {
+            playbackHeaders["Referer"] = referer
+        }
+        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": playbackHeaders])
         let item = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: item)
+        player?.allowsExternalPlayback = true
+        player?.usesExternalPlaybackWhileExternalScreenIsActive = true
         delegate = self
         allowsPictureInPicturePlayback = true
         if #available(iOS 14.2, *) { canStartPictureInPictureAutomaticallyFromInline = true }
         modalPresentationStyle = .fullScreen
-        title = "KazumiT · 画中画"
+        title = "KazumiT · 画中画 / AirPlay"
         statusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
             DispatchQueue.main.async {
                 guard let self = self, !self.finished else { return }
