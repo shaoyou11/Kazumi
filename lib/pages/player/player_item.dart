@@ -1595,7 +1595,7 @@ class _PlayerItemState extends State<PlayerItem>
                         child: Container(
                           margin: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 46),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white24)),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.32), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: 0.18))),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                             Icon(_seekDirection < 0 ? Icons.fast_rewind_rounded : Icons.fast_forward_rounded, color: Colors.white, size: 20),
                             const SizedBox(width: 6),

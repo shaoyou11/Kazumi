@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -55,7 +54,7 @@ class _PlayerDeviceStatusState extends State<PlayerDeviceStatus> with WidgetsBin
   @override
   Widget build(BuildContext context) {
     final time = '${_now.hour.toString().padLeft(2, '0')}:${_now.minute.toString().padLeft(2, '0')}';
-    const textStyle = TextStyle(color: Colors.white, fontSize: 12,
+    const textStyle = TextStyle(color: Colors.white, fontSize: 14,
         height: 1, fontWeight: FontWeight.w600,
         fontFeatures: [FontFeature.tabularFigures()]);
     return Semantics(label: '时间 $time，电量 ${_battery ?? '未知'}',
@@ -67,7 +66,7 @@ class _PlayerDeviceStatusState extends State<PlayerDeviceStatus> with WidgetsBin
           const SizedBox(width: 10),
           RotatedBox(quarterTurns: 1,
             child: Icon(_charging ? Icons.battery_charging_full : Icons.battery_std,
-              size: 17, color: (_battery ?? 100) <= 20 ? Colors.amber : Colors.white)),
+              size: 20, color: (_battery ?? 100) <= 20 ? Colors.amber : Colors.white)),
           const SizedBox(width: 3),
           Text(_battery == null || _battery! < 0 ? '—' : '$_battery%', style: textStyle),
         ]),
