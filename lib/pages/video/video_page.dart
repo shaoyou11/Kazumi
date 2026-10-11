@@ -537,11 +537,10 @@ class _VideoPageState extends State<VideoPage>
       });
 
   Widget get tabBody {
-    final colors = Theme.of(context).colorScheme;
     final int episodeNum = videoPageController.commentsEpisode;
 
-    return ColoredBox(
-      color: colors.surface,
+    return Builder(builder: (context) => ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -564,6 +563,6 @@ class _VideoPageState extends State<VideoPage>
           ),
         ],
       ),
-    );
+    ));
   }
 }

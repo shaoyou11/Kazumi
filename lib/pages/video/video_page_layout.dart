@@ -34,6 +34,7 @@ class VideoPageLayout extends StatelessWidget {
               colorScheme: ColorScheme.fromSeed(seedColor: baseTheme.colorScheme.primary,
                   brightness: Brightness.dark, surface: const Color(0xFF151619)),
               scaffoldBackgroundColor: const Color(0xFF151619),
+              iconTheme: const IconThemeData(color: Colors.white70),
               textTheme: baseTheme.textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
             )
           : baseTheme;
