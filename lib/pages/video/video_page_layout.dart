@@ -38,8 +38,7 @@ class VideoPageLayout extends StatelessWidget {
               textTheme: baseTheme.textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
             )
           : baseTheme;
-      final frameColor = !fillsWindow && defaultTargetPlatform == TargetPlatform.iOS
-          ? playbackTheme.scaffoldBackgroundColor : Colors.black;
+      const frameColor = Colors.black;
       return AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light.copyWith(
           statusBarColor: frameColor, systemNavigationBarColor: frameColor),
