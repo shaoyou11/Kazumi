@@ -187,7 +187,7 @@ private final class KazumiTSystemPlayer: AVPlayerViewController, AVPlayerViewCon
     func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
         inPictureInPicture = false
         // Closing the floating window returns to Flutter; restoring keeps AVKit visible.
-        if presentingViewController == nil { finish() }
+        if presentingViewController == nil { finish(resume: false) }
     }
     func playerViewController(_ playerViewController: AVPlayerViewController,
                               restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
@@ -197,13 +197,13 @@ private final class KazumiTSystemPlayer: AVPlayerViewController, AVPlayerViewCon
         while let presented = root.presentedViewController { root = presented }
         root.present(self, animated: true) { completionHandler(true) }
     }
-    func finish(error: String? = nil) {
+    func finish(error: String? = nil, resume: Bool? = nil) {
         guard !finished else { return }
         finished = true
         timeout?.cancel()
         statusObservation = nil
         let seconds = player?.currentTime().seconds ?? targetPosition
-        let playing = error == nil && (player?.rate ?? 0) > 0
+        let playing = error == nil && (resume ?? ((player?.rate ?? 0) > 0))
         player?.pause()
         let callback = completion
         completion = nil

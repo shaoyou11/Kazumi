@@ -155,7 +155,12 @@ class _PlayerItemState extends State<PlayerItem>
       if (!mounted || !identical(player, playerController.playback.mediaPlayer)) return;
       final seconds = (result?['position'] as num?)?.toDouble();
       if (seconds != null && seconds.isFinite) {
-        await playerController.seek(Duration(milliseconds: (seconds * 1000).round()), enableSync: false);
+        final position = Duration(milliseconds: (seconds * 1000).round());
+        await playerController.seek(position, enableSync: false);
+        final identity = videoPageController.currentHistoryIdentity;
+        if (identity != null && identity.canRecord) {
+          historyController.updateHistory(identity, position, duration: playerController.playback.playerDuration);
+        }
       }
       if (result?['playing'] == true) await playerController.play(enableSync: false);
     } on PlatformException catch (_) {
@@ -1231,6 +1236,7 @@ class _PlayerItemState extends State<PlayerItem>
 
   Timer getPlayerTimer() {
     return Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_iosNativePlayback) return;
       playerController.syncPlaybackState();
       unawaited(_updateAndroidPIPActions());
       _syncAudioServiceState();
