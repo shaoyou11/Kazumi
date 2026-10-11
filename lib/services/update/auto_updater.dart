@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:kazumi/services/update/kazumit_update.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -171,6 +172,7 @@ class AutoUpdater {
   }
 
   Future<void> autoCheckForUpdates() async {
+    if (Platform.isIOS) return; // NAS checks and signs the custom release.
     final autoUpdate = GStorage.getSetting(SettingsKeys.autoUpdate);
     if (!autoUpdate) return;
 
@@ -185,6 +187,7 @@ class AutoUpdater {
   }
 
   Future<void> manualCheckForUpdates() async {
+    if (Platform.isIOS) { await KazumiTUpdate.open(); return; }
     try {
       final updateInfo = await checkForUpdates();
       if (updateInfo != null) {

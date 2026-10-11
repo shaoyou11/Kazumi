@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:kazumi/services/update/kazumit_update.dart';
 import 'package:flutter/material.dart';
 
 import 'package:kazumi/bean/settings/settings_detail_scaffold.dart';
@@ -24,7 +26,14 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
             SettingsSection(
               title: const Text('启动时检查更新'),
               tiles: [
-                SettingsTile.switchTile(
+                if (Platform.isIOS)
+                  SettingsTile(
+                    leading: Icons.system_update_alt,
+                    title: const Text('签名更新入口'),
+                    description: const Text('NAS 检查并签名；在“关于”中打开新版安装页面'),
+                    onPressed: (_) => KazumiTUpdate.configure(),
+                  ),
+                if (!Platform.isIOS) SettingsTile.switchTile(
                   leading: Icons.update_rounded,
                   title: const Text('应用更新'),
                   initialValue: _autoUpdate,

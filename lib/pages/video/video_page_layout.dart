@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 typedef VideoPlayerLayout = ({bool fillsWindow, bool hasSidePanel});
 
@@ -26,7 +27,9 @@ class VideoPageLayout extends StatelessWidget {
       final fillsWindow =
           fullscreen || isPip || constraints.maxWidth > constraints.maxHeight;
       final hasSidePanel = fillsWindow && !isPip && sidePanel != null;
-      return SafeArea(
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: ColoredBox(color: Colors.black, child: SafeArea(
         top: !fillsWindow,
         bottom: !fillsWindow,
         left: !fillsWindow,
@@ -51,13 +54,13 @@ class VideoPageLayout extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (!fillsWindow) Expanded(child: tabs),
+                if (!fillsWindow) Expanded(child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor, child: tabs)),
               ],
             ),
             if (hasSidePanel) sidePanel!,
           ],
         ),
-      );
+      )));
     });
   }
 }

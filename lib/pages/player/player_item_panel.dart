@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:kazumi/pages/player/player_device_status.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
@@ -794,6 +795,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                         ),
                 ),
               ),
+              if (defaultTargetPlatform == TargetPlatform.iOS && widget.fillsWindow)
+                const PlayerDeviceStatus(),
               _forwardButton(),
               if (_desktop)
                 PlayerScreenshotControls(
@@ -803,7 +806,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                 ),
               if ((_desktop &&
                       (compact || !videoPageController.isFullscreen)) ||
-                  (defaultTargetPlatform == TargetPlatform.android))
+                  (defaultTargetPlatform == TargetPlatform.android) ||
+                  defaultTargetPlatform == TargetPlatform.iOS)
                 IconButton(
                   onPressed: () async {
                     if (_desktop) {

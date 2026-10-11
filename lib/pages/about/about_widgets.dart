@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -150,7 +151,7 @@ class _CheckUpdateButtonState extends State<CheckUpdateButton> {
   @override
   Widget build(BuildContext context) => StateActionButton(
         onPressed: _checking ? null : _check,
-        text: _checking ? '正在检查…' : '检查更新',
+        text: _checking ? '正在打开…' : (Platform.isIOS ? '签名更新 / 安装新版' : '检查更新'),
         reserveText: '正在检查…',
         icon: Icons.update_rounded,
       );

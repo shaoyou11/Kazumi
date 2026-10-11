@@ -305,6 +305,18 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
           SettingsSection(
             title: Text('播放行为'),
             tiles: [
+              SettingsSliderTile(
+                leading: Icons.touch_app_rounded,
+                title: Text('双击左右跳转'),
+                description: Text('左侧快退、右侧快进；中间双击播放 / 暂停。0 秒为关闭'),
+                value: GStorage.getSetting(SettingsKeys.doubleTapSeekSeconds).toDouble(),
+                min: 0, max: 30, divisions: 6,
+                valueLabel: '${GStorage.getSetting(SettingsKeys.doubleTapSeekSeconds)} 秒',
+                onChanged: (value) async {
+                  await GStorage.putSetting(SettingsKeys.doubleTapSeekSeconds, value.round());
+                  if (mounted) setState(() {});
+                },
+              ),
               SettingsTile.switchTile(
                 leading: Icons.headphones_rounded,
                 onToggle: (value) async {

@@ -1,0 +1,64 @@
+name: KazumiT iOS 定制发布
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 20 */2 * *'
+permissions:
+  contents: write
+concurrency:
+  group: kazumit-ios-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'shaoyou11/Kazumi'
+    runs-on: macos-26
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: custom/ios
+          fetch-depth: 0
+      - name: 合并正式版，冲突时停止
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prepare-custom-release.sh
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: steps.source.outputs.build == 'true'
+        with:
+          xcode-version: latest-stable
+      - uses: subosito/flutter-action@v2
+        if: steps.source.outputs.build == 'true'
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - name: 依赖与检查
+        if: steps.source.outputs.build == 'true'
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos --fatal-warnings
+          flutter test test/kazumit_gestures_test.dart
+      - name: 编译 iOS 定制包
+        if: steps.source.outputs.build == 'true'
+        env:
+          KAZUMIT_UPDATE_URL: ${{ secrets.KAZUMIT_UPDATE_URL }}
+        run: |
+          python3 -c 'import os,json;json.dump({"KAZUMIT_UPDATE_URL":os.environ.get("KAZUMIT_UPDATE_URL","")},open("build/defines.json","w"))'
+          flutter build ios --release --no-codesign --build-number=$((300000 + GITHUB_RUN_NUMBER)) --dart-define-from-file=build/defines.json
+          python3 scripts/package-custom-release.py
+      - name: 发布与保存分支
+        if: steps.source.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          git push origin HEAD:custom/ios
+          gh release create "$RELEASE_TAG" build/KazumiT.ipa build/kazumit-build.json --target "$(git rev-parse HEAD)" --title "KazumiT $RELEASE_TAG" --notes-file build/release-notes.txt --latest
+      - uses: actions/upload-artifact@v4
+        if: steps.source.outputs.build == 'true' && success()
+        with:
+          name: KazumiT-iOS
+          path: |
+            build/KazumiT.ipa
+            build/kazumit-build.json

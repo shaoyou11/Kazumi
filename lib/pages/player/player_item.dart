@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:kazumi/pages/player/double_tap_seek.dart';
 import 'package:kazumi/pages/player/player_item_panel.dart';
 import 'package:kazumi/pages/player/player_keyboard_shortcuts.dart';
 import 'package:kazumi/pages/player/controller/player_super_resolution.dart';
@@ -128,6 +129,44 @@ class _PlayerItemState extends State<PlayerItem>
   PlayerPanelHold? _progressBarDragHold;
   PointerDeviceKind? _lastTapPointerKind;
   PointerDeviceKind? _lastDoubleTapPointerKind;
+  double? _doubleTapX;
+  bool _iosNativePlayback = false;
+  String? _seekFeedback;
+  int _seekDirection = 0;
+  Timer? _seekFeedbackTimer;
+
+  Future<void> _enterIOSPictureInPicture() async {
+    if (_iosNativePlayback) return;
+    final player = playerController.playback.mediaPlayer;
+    if (player == null || playerController.videoUrl.isEmpty) return;
+    final wasPlaying = playerController.playback.playerPlaying;
+    _iosNativePlayback = true;
+    try {
+      await playerController.pause(enableSync: false);
+      final result = await const MethodChannel('com.shaoyou11.kazumit/player')
+          .invokeMapMethod<String, dynamic>('openPictureInPicture', {
+        'url': playerController.videoUrl,
+        'referer': playerController.referer,
+        'position': playerController.playback.currentPosition.inMilliseconds / 1000.0,
+        'rate': playerController.playback.playerSpeed,
+        'playing': wasPlaying,
+      });
+      if (!mounted || !identical(player, playerController.playback.mediaPlayer)) return;
+      final seconds = (result?['position'] as num?)?.toDouble();
+      if (seconds != null && seconds.isFinite) {
+        await playerController.seek(Duration(milliseconds: (seconds * 1000).round()), enableSync: false);
+      }
+      if (result?['playing'] == true) await playerController.play(enableSync: false);
+    } on PlatformException catch (_) {
+      if (mounted && identical(player, playerController.playback.mediaPlayer)) {
+        if (wasPlaying) await playerController.play(enableSync: false);
+        KazumiDialog.showToast(message: '此片源无法使用系统画中画，已恢复原播放器');
+      }
+    } finally {
+      _iosNativePlayback = false;
+    }
+  }
+
 
   late final AnimationController _panelVisibilityController;
   late final AnimationController _screenshotFeedbackController;
@@ -156,6 +195,7 @@ class _PlayerItemState extends State<PlayerItem>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
+    if (_iosNativePlayback) return;
     if (state == AppLifecycleState.paused && !backgroundPlayback) {
       // Suspend before awaiting pause so a later resume wins; pause alone keeps prefetching.
       final suspend = playerController.playback.setPrefetchSuspended(true);
@@ -500,6 +540,20 @@ class _PlayerItemState extends State<PlayerItem>
   }
 
   void _handleDoubleTap(PointerDeviceKind? pointerKind) {
+    if (!isDesktop() && _doubleTapX != null) {
+      final box = _videoSurfaceKey.currentContext?.findRenderObject() as RenderBox?;
+      final direction = doubleTapSeekDirection(_doubleTapX!, box?.size.width ?? 0);
+      final seconds = GStorage.getSetting(SettingsKeys.doubleTapSeekSeconds).clamp(0, 30).toInt();
+      if (direction != 0 && seconds > 0) {
+        unawaited(_seekWithPlayerTimer(() => playerController.seekBy(Duration(seconds: direction * seconds))));
+        _seekFeedbackTimer?.cancel();
+        setState(() { _seekDirection = direction; _seekFeedback = '${direction > 0 ? '快进' : '快退'} $seconds 秒'; });
+        _seekFeedbackTimer = Timer(const Duration(milliseconds: 850), () {
+          if (mounted) setState(() => _seekFeedback = null);
+        });
+        return;
+      }
+    }
     if (shouldToggleFullscreenOnDoubleTap(
       isDesktop: isDesktop(),
       isPip: videoPageController.isPip,
@@ -1371,6 +1425,7 @@ class _PlayerItemState extends State<PlayerItem>
     hideTimer?.cancel();
     mouseScrollerTimer?.cancel();
     _adjustmentHudHideTimer?.cancel();
+    _seekFeedbackTimer?.cancel();
     _panelVisibilityController.dispose();
     _screenshotFeedbackController.dispose();
     _disposePlayerMenu();
@@ -1456,6 +1511,7 @@ class _PlayerItemState extends State<PlayerItem>
                           ? null
                           : (details) {
                               _lastDoubleTapPointerKind = details.kind;
+                               _doubleTapX = details.localPosition.dx;
                             },
                       onDoubleTap: (playerController.panel.lockPanel)
                           ? null
@@ -1525,6 +1581,16 @@ class _PlayerItemState extends State<PlayerItem>
                         animation: _screenshotFeedbackAnimation,
                       ),
                     ),
+                    if (_seekFeedback != null)
+                      Positioned.fill(child: IgnorePointer(child: Align(
+                        alignment: _seekDirection < 0 ? Alignment.centerLeft : Alignment.centerRight,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 28),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(24)),
+                          child: Text(_seekFeedback!, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                        ),
+                      ))),
                     (Platform.isAndroid &&
                             (videoPageController.isPip || _pipEnterRequested))
                         ? const SizedBox.shrink()
@@ -1538,7 +1604,7 @@ class _PlayerItemState extends State<PlayerItem>
                             onToggleSidePanel: widget.onToggleSidePanel,
                             handleFullscreen: handleFullscreen,
                             enterAndroidPictureInPicture:
-                                enterAndroidPictureInPicture,
+                                Platform.isIOS ? _enterIOSPictureInPicture : enterAndroidPictureInPicture,
                             handleProgressBarDragStart:
                                 handleProgressBarDragStart,
                             handleProgressBarSeek: handleProgressBarSeek,

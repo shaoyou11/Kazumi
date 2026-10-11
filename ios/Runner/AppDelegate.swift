@@ -5,6 +5,8 @@ import AVKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
 
+    private var kazumiTPlayer: KazumiTSystemPlayer?
+
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -14,6 +16,40 @@ import AVKit
 
     func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
         GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+        let playerChannel = FlutterMethodChannel(name: "com.shaoyou11.kazumit/player", binaryMessenger: engineBridge.applicationRegistrar.messenger())
+        playerChannel.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { result(FlutterError(code: "unavailable", message: "播放器不可用", details: nil)); return }
+            if call.method == "deviceStatus" {
+                UIDevice.current.isBatteryMonitoringEnabled = true
+                let device = UIDevice.current
+                result(["battery": Int((device.batteryLevel * 100).rounded()), "charging": device.batteryState == .charging || device.batteryState == .full])
+            } else if call.method == "openPictureInPicture" {
+                guard self.kazumiTPlayer == nil,
+                      AVPictureInPictureController.isPictureInPictureSupported(),
+                      let args = call.arguments as? [String: Any],
+                      let text = args["url"] as? String, let url = URL(string: text),
+                      ["http", "https", "file"].contains(url.scheme?.lowercased() ?? ""),
+                      let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                      let root = scene.windows.first(where: \.isKeyWindow)?.rootViewController,
+                      root.presentedViewController == nil else {
+                    result(FlutterError(code: "unavailable", message: "画中画暂不可用", details: nil)); return
+                }
+                do { try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback); try AVAudioSession.sharedInstance().setActive(true) }
+                catch { result(FlutterError(code: "audio", message: "音频会话不可用", details: nil)); return }
+                let controller = KazumiTSystemPlayer()
+                self.kazumiTPlayer = controller
+                controller.configure(url: url, referer: args["referer"] as? String ?? "",
+                                     position: (args["position"] as? NSNumber)?.doubleValue ?? 0,
+                                     rate: (args["rate"] as? NSNumber)?.floatValue ?? 1,
+                                     playing: args["playing"] as? Bool ?? true) { [weak self] position, playing, error in
+                    self?.kazumiTPlayer = nil
+                    if let error = error { result(FlutterError(code: "playback", message: error, details: nil)) }
+                    else { result(["position": position, "playing": playing]) }
+                }
+                root.present(controller, animated: true)
+            } else { result(FlutterMethodNotImplemented) }
+        }
+
 
         let channel = FlutterMethodChannel(
             name: "com.predidit.kazumi/intent",
@@ -89,5 +125,89 @@ import AVKit
 //        if UIApplication.shared.canOpenURL(appURL) && referer.isEmpty {
 //            UIApplication.shared.open(appURL, options: [:], completionHandler: nil)
 //        }
+    }
+}
+
+// System playback handoff: AVKit owns PiP, Flutter resumes at the returned position.
+private final class KazumiTSystemPlayer: AVPlayerViewController, AVPlayerViewControllerDelegate {
+    private var completion: ((Double, Bool, String?) -> Void)?
+    private var statusObservation: NSKeyValueObservation?
+    private var timeout: DispatchWorkItem?
+    private var inPictureInPicture = false
+    private var finished = false
+    private var ready = false
+    private var targetPosition: Double = 0
+    private var desiredRate: Float = 1
+    private var shouldPlay = true
+
+    func configure(url: URL, referer: String, position: Double, rate: Float,
+                   playing: Bool, completion: @escaping (Double, Bool, String?) -> Void) {
+        self.completion = completion
+        targetPosition = position.isFinite ? max(0, position) : 0
+        desiredRate = max(0.25, min(3, rate))
+        shouldPlay = playing
+        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": ["Referer": referer]])
+        let item = AVPlayerItem(asset: asset)
+        player = AVPlayer(playerItem: item)
+        delegate = self
+        allowsPictureInPicturePlayback = true
+        if #available(iOS 14.2, *) { canStartPictureInPictureAutomaticallyFromInline = true }
+        modalPresentationStyle = .fullScreen
+        title = "KazumiT · 画中画"
+        statusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
+            DispatchQueue.main.async {
+                guard let self = self, !self.finished else { return }
+                if item.status == .failed { self.finish(error: "此片源不支持系统播放器"); return }
+                guard item.status == .readyToPlay, !self.ready else { return }
+                self.ready = true
+                self.timeout?.cancel()
+                self.player?.seek(to: CMTime(seconds: self.targetPosition, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                    DispatchQueue.main.async {
+                        guard let self = self, !self.finished else { return }
+                        if self.shouldPlay { self.player?.playImmediately(atRate: self.desiredRate) }
+                    }
+                }
+            }
+        }
+        let work = DispatchWorkItem { [weak self] in self?.finish(error: "系统播放器加载超时") }
+        timeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 25, execute: work)
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if !inPictureInPicture && (isBeingDismissed || presentingViewController == nil) { finish() }
+    }
+    func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        inPictureInPicture = true
+    }
+    func playerViewController(_ playerViewController: AVPlayerViewController, failedToStartPictureInPictureWithError error: Error) {
+        inPictureInPicture = false
+    }
+    func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        inPictureInPicture = false
+        // Closing the floating window returns to Flutter; restoring keeps AVKit visible.
+        if presentingViewController == nil { finish() }
+    }
+    func playerViewController(_ playerViewController: AVPlayerViewController,
+                              restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        if presentingViewController != nil { completionHandler(true); return }
+        guard let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              var root = scene.windows.first(where: \.isKeyWindow)?.rootViewController else { completionHandler(false); return }
+        while let presented = root.presentedViewController { root = presented }
+        root.present(self, animated: true) { completionHandler(true) }
+    }
+    func finish(error: String? = nil) {
+        guard !finished else { return }
+        finished = true
+        timeout?.cancel()
+        statusObservation = nil
+        let seconds = player?.currentTime().seconds ?? targetPosition
+        let playing = error == nil && (player?.rate ?? 0) > 0
+        player?.pause()
+        let callback = completion
+        completion = nil
+        let done: () -> Void = { callback?(seconds.isFinite ? seconds : self.targetPosition, playing, error) }
+        if presentingViewController != nil { dismiss(animated: true, completion: done) } else { done() }
     }
 }
