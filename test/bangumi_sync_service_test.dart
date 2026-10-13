@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
@@ -13,6 +14,13 @@ import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/request/core/network_exception.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/sync/bangumi_sync_service.dart';
+import 'package:kazumi/request/apis/bangumi_api.dart';
+import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/modules/collect/collect_module.dart';
+import 'package:kazumi/pages/search/search_controller.dart';
+import 'package:kazumi/pages/search/search_page.dart';
+import 'package:kazumi/repositories/collect_repository.dart';
+import 'package:kazumi/repositories/search_history_repository.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
@@ -36,6 +44,11 @@ void main() {
     await GStorage.putSetting(SettingsKeys.bangumiAccessToken, 'saved-token');
     await GStorage.putSetting(SettingsKeys.bangumiSyncEnable, true);
     await GStorage.putSetting(SettingsKeys.enableBangumiProxy, false);
+    await GStorage.putSetting(SettingsKeys.bangumiAcceleration, '');
+    await GStorage.putSetting(
+      SettingsKeys.bangumiLastSyncReport,
+      <String, dynamic>{},
+    );
     await GStorage.collectibles.clear();
     DioFactory.reset();
     adapter = _BangumiAdapter();
@@ -50,35 +63,41 @@ void main() {
     PathProviderPlatform.instance = originalPathProvider;
     final testRoot = directory.absolute.path;
     expect(testRoot.startsWith(Directory.systemTemp.absolute.path), isTrue);
-    expect(directory.uri.pathSegments.where((part) => part.isNotEmpty).last,
-        startsWith('kazumi_bangumi_test_'));
-    await directory.delete(recursive: true);
+    expect(
+      directory.uri.pathSegments.where((part) => part.isNotEmpty).last,
+      startsWith('kazumi_bangumi_test_'),
+    );
+    // Retain isolated test files for inspection; never recursively delete.
   });
 
-  test('startup connection failure preserves enabled preference and can retry',
-      () async {
-    adapter.respond = (request) => throw DioException(
-          requestOptions: request,
-          type: DioExceptionType.connectionTimeout,
-        );
-    await expectLater(bangumi.ping(), throwsA(isA<NetworkException>()));
-    expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
-    expect(bangumi.initialized, isFalse);
-    expect(bangumi.isConnecting, isFalse);
-    expect(bangumi.lastError, contains('超时'));
+  test(
+    'startup connection failure preserves enabled preference and can retry',
+    () async {
+      adapter.respond = (request) => throw DioException(
+        requestOptions: request,
+        type: DioExceptionType.connectionTimeout,
+      );
+      await expectLater(bangumi.ping(), throwsA(isA<NetworkException>()));
+      expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
+      expect(bangumi.initialized, isFalse);
+      expect(bangumi.isConnecting, isFalse);
+      expect(bangumi.lastError, contains('超时'));
 
-    adapter.respond = (_) async => _user();
-    await bangumi.ping();
-    expect(bangumi.initialized, isTrue);
-    expect(bangumi.username, 'saved-user');
-    expect(bangumi.lastError, isNull);
-  });
+      adapter.respond = (_) async => _user();
+      await bangumi.ping();
+      expect(bangumi.initialized, isTrue);
+      expect(bangumi.username, 'saved-user');
+      expect(bangumi.lastError, isNull);
+    },
+  );
 
   test('enabling sends authorization while sync is disabled', () async {
     await GStorage.putSetting(SettingsKeys.bangumiSyncEnable, false);
     await bangumi.setEnabled(true);
     expect(
-        adapter.requests.single.headers['Authorization'], 'Bearer saved-token');
+      adapter.requests.single.headers['Authorization'],
+      'Bearer saved-token',
+    );
     expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
   });
 
@@ -103,20 +122,29 @@ void main() {
     }
   });
 
-  test('failed draft validation preserves credentials and connected account',
-      () async {
-    await bangumi.ping();
-    adapter.respond = (_) async => _json({}, status: 401);
-    await expectLater(
-        bangumi.saveToken('invalid-draft'), throwsA(isA<NetworkException>()));
-    expect(
-        adapter.requests.last.headers['Authorization'], 'Bearer invalid-draft');
-    expect(GStorage.getSetting(SettingsKeys.bangumiAccessToken), 'saved-token');
-    expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
-    expect(bangumi.initialized, isTrue);
-    expect(bangumi.username, 'saved-user');
-    expect(bangumi.isConnecting, isFalse);
-  });
+  test(
+    'failed draft validation preserves credentials and connected account',
+    () async {
+      await bangumi.ping();
+      adapter.respond = (_) async => _json({}, status: 401);
+      await expectLater(
+        bangumi.saveToken('invalid-draft'),
+        throwsA(isA<NetworkException>()),
+      );
+      expect(
+        adapter.requests.last.headers['Authorization'],
+        'Bearer invalid-draft',
+      );
+      expect(
+        GStorage.getSetting(SettingsKeys.bangumiAccessToken),
+        'saved-token',
+      );
+      expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
+      expect(bangumi.initialized, isTrue);
+      expect(bangumi.username, 'saved-user');
+      expect(bangumi.isConnecting, isFalse);
+    },
+  );
 
   test('draft validation is isolated and only commits after success', () async {
     final response = Completer<ResponseBody>();
@@ -133,26 +161,37 @@ void main() {
     expect(GStorage.getSetting(SettingsKeys.bangumiAccessToken), 'saved-token');
     await BangumiClient.instance.get('https://api.bgm.tv/v0/subjects/1');
     expect(
-        adapter.requests.last.headers['Authorization'], 'Bearer saved-token');
+      adapter.requests.last.headers['Authorization'],
+      'Bearer saved-token',
+    );
     response.complete(_user('replacement-user'));
     await saving;
-    expect(GStorage.getSetting(SettingsKeys.bangumiAccessToken),
-        'replacement-token');
+    expect(
+      GStorage.getSetting(SettingsKeys.bangumiAccessToken),
+      'replacement-token',
+    );
     expect(bangumi.username, 'replacement-user');
     expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
   });
 
-  test('revalidating an expired saved token updates status without disabling',
-      () async {
-    await bangumi.ping();
-    adapter.respond = (_) async => _json({}, status: 401);
-    await expectLater(
-        bangumi.saveToken('saved-token'), throwsA(isA<NetworkException>()));
-    expect(bangumi.initialized, isFalse);
-    expect(bangumi.lastError, contains('无效或已过期'));
-    expect(GStorage.getSetting(SettingsKeys.bangumiAccessToken), 'saved-token');
-    expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
-  });
+  test(
+    'revalidating an expired saved token updates status without disabling',
+    () async {
+      await bangumi.ping();
+      adapter.respond = (_) async => _json({}, status: 401);
+      await expectLater(
+        bangumi.saveToken('saved-token'),
+        throwsA(isA<NetworkException>()),
+      );
+      expect(bangumi.initialized, isFalse);
+      expect(bangumi.lastError, contains('无效或已过期'));
+      expect(
+        GStorage.getSetting(SettingsKeys.bangumiAccessToken),
+        'saved-token',
+      );
+      expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
+    },
+  );
 
   test('saving a token while disabled does not enable sync', () async {
     await GStorage.putSetting(SettingsKeys.bangumiSyncEnable, false);
@@ -169,20 +208,23 @@ void main() {
   });
 
   for (final status in [401, 403, 429, 503]) {
-    test('HTTP $status leaves a persistent actionable connection error',
-        () async {
-      adapter.respond = (_) async => _json({}, status: status);
-      await expectLater(bangumi.ping(), throwsA(isA<NetworkException>()));
-      expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
-      expect(
+    test(
+      'HTTP $status leaves a persistent actionable connection error',
+      () async {
+        adapter.respond = (_) async => _json({}, status: status);
+        await expectLater(bangumi.ping(), throwsA(isA<NetworkException>()));
+        expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isTrue);
+        expect(
           bangumi.lastError,
           contains(switch (status) {
             401 => '无效或已过期',
             403 => '拒绝访问',
             429 => '请求过于频繁',
             _ => 'HTTP 503',
-          }));
-    });
+          }),
+        );
+      },
+    );
   }
 
   test('malformed user response does not enable sync', () async {
@@ -193,51 +235,58 @@ void main() {
     expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isFalse);
   });
 
-  test('busy connection checks serialize without clearing a valid session',
-      () async {
-    await bangumi.ping();
-    final response = Completer<void>();
-    final started = Completer<void>();
-    adapter.respond = (_) async {
-      if (!started.isCompleted) started.complete();
-      await response.future;
-      return _user();
-    };
-    final first = bangumi.ping();
-    await started.future;
-    final second = bangumi.ping();
-    expect(bangumi.initialized, isTrue);
-    expect(bangumi.username, 'saved-user');
-    response.complete();
-    await Future.wait([first, second]);
-    expect(bangumi.initialized, isTrue);
-  });
+  test(
+    'busy connection checks serialize without clearing a valid session',
+    () async {
+      await bangumi.ping();
+      final response = Completer<void>();
+      final started = Completer<void>();
+      adapter.respond = (_) async {
+        if (!started.isCompleted) started.complete();
+        await response.future;
+        return _user();
+      };
+      final first = bangumi.ping();
+      await started.future;
+      final second = bangumi.ping();
+      expect(bangumi.initialized, isTrue);
+      expect(bangumi.username, 'saved-user');
+      response.complete();
+      await Future.wait([first, second]);
+      expect(bangumi.initialized, isTrue);
+    },
+  );
 
   test('immediate sync reconnects after initialization failure', () async {
     adapter.respond = (_) async => _json({}, status: 503);
     await expectLater(bangumi.ping(), throwsA(isA<NetworkException>()));
-    adapter.respond =
-        (request) async => request.method == 'POST' ? _json({}) : _user();
+    adapter.respond = (request) async =>
+        request.method == 'POST' ? _json({}) : _user();
     expect(await bangumi.syncCollectibleWhenIdle(123, 1), isTrue);
     expect(adapter.requests.last.method, 'POST');
     expect(bangumi.initialized, isTrue);
     expect(bangumi.lastError, isNull);
   });
 
-  test('manual collection sync reconnects instead of rejecting uninitialized',
-      () async {
-    adapter.respond = (request) async => request.uri.path == '/v0/me'
-        ? _user()
-        : _json({'data': [], 'total': 0, 'limit': 50});
-    final errors = <String>[];
-    final controller = CollectController(CollectCrudRepository());
-    expect(
+  test(
+    'manual collection sync reconnects instead of rejecting uninitialized',
+    () async {
+      adapter.respond = (request) async => request.uri.path == '/v0/me'
+          ? _user()
+          : _json({'data': [], 'total': 0, 'limit': 50});
+      final errors = <String>[];
+      final controller = CollectController(CollectCrudRepository());
+      expect(
         await controller.syncCollectiblesBangumi(
-            onProgress: (message, current, total) {}, onError: errors.add),
-        isTrue);
-    expect(errors, isEmpty);
-    expect(bangumi.initialized, isTrue);
-  });
+          onProgress: (message, current, total) {},
+          onError: errors.add,
+        ),
+        isTrue,
+      );
+      expect(errors, isEmpty);
+      expect(bangumi.initialized, isTrue);
+    },
+  );
 
   test('queued disable prevents subsequent full sync requests', () async {
     final response = Completer<ResponseBody>();
@@ -255,29 +304,166 @@ void main() {
     expect(GStorage.getSetting(SettingsKeys.bangumiSyncEnable), isFalse);
     expect(adapter.requests, hasLength(1));
   });
+
+  test(
+    'personal build searches official API while retaining other mirror routes',
+    () async {
+      await GStorage.putSetting(SettingsKeys.enableBangumiProxy, true);
+      adapter.respond = (_) async => _json({
+        'data': [_subject(642666, '李熊猫')],
+      });
+      final page = await BangumiApi.bangumiSearch('李熊猫');
+      expect(page!.items.single.nameCn, '李熊猫');
+      final request = adapter.requests.single;
+      expect(request.uri.host, 'api.bgm.tv');
+      expect(request.uri.queryParameters, {'limit': '20', 'offset': '0'});
+      expect(request.headers.containsKey('X-Signature'), isFalse);
+      expect((request.data as Map)['keyword'], '李熊猫');
+      await BangumiClient.instance.get(
+        'https://next.bgm.tv/p1/subjects/1/comments',
+      );
+      expect(adapter.requests.last.uri.host, 'next.bgm.tv');
+      await BangumiClient.instance.get('https://api.bgm.tv/v0/subjects/1');
+      expect(adapter.requests.last.uri.host, 'api.kazumi.fyi');
+    },
+  );
+
+  test(
+    'search distinguishes a network failure from a successful empty result',
+    () async {
+      final controller = SearchPageController(
+        CollectRepository(),
+        SearchHistoryRepository(),
+      );
+      adapter.respond = (_) async => _json({}, status: 401);
+      await controller.searchBangumi('李熊猫', type: 'init');
+      expect(controller.isTimeOut, isTrue);
+      expect(controller.isLoading, isFalse);
+      adapter.respond = (_) async => _json({'data': []});
+      await controller.searchBangumi('确实不存在', type: 'init');
+      expect(controller.isTimeOut, isFalse);
+      expect(controller.bangumiList, isEmpty);
+      expect(controller.hasMoreSearchResults, isFalse);
+      adapter.respond = (_) async => _json({
+        'data': [_subject(642666, '李熊猫')],
+      });
+      await controller.searchBangumi('李熊猫', type: 'init');
+      expect(controller.bangumiList.single.id, 642666);
+      expect(controller.isTimeOut, isFalse);
+    },
+  );
+
+  test('partial sync remains visible after reconnect and clears only after successful sync', () async {
+    for (final id in [101, 102]) {
+      await GStorage.putCollectible(
+        CollectedBangumi(
+          BangumiItem.fromJson(_subject(id, '条目$id')),
+          DateTime.now(),
+          1,
+        ),
+      );
+    }
+    var posts = 0;
+    adapter.respond = (request) async {
+      if (request.uri.path == '/v0/me') return _user();
+      if (request.method == 'POST')
+        return _json({}, status: ++posts == 2 ? 503 : 200);
+      return _json({'data': [], 'total': 0, 'limit': 50});
+    };
+    await expectLater(bangumi.syncCollectibles(), throwsException);
+    expect(bangumi.isSyncing, isFalse);
+    expect(bangumi.lastSyncReport!.completed, 1);
+    expect(bangumi.lastSyncReport!.total, 2);
+    expect(bangumi.lastSyncReport!.failed, isTrue);
+    await bangumi.ping();
+    expect(bangumi.lastSyncReport!.failed, isTrue);
+    // Recreated service state reads the saved report, without saving a token in it.
+    bangumi.resetForTesting();
+    expect(bangumi.lastSyncReport!.completed, 1);
+    adapter.respond = (r) async => r.uri.path == '/v0/me'
+        ? _user()
+        : r.method == 'POST'
+        ? _json({})
+        : _json({'data': [], 'total': 0, 'limit': 50});
+    await bangumi.syncCollectibles();
+    expect(bangumi.lastSyncReport!.failed, isFalse);
+    expect(bangumi.lastSyncReport!.completed, 2);
+  });
+
+  test(
+    'switching account clears previous sync report after validation',
+    () async {
+      adapter.respond = (_) async => _json({}, status: 503);
+      await expectLater(
+        bangumi.syncCollectibles(),
+        throwsA(isA<NetworkException>()),
+      );
+      expect(bangumi.lastSyncReport!.failed, isTrue);
+      adapter.respond = (_) async => _user('replacement-user');
+      await bangumi.saveToken('replacement-token');
+      expect(bangumi.lastSyncReport, isNull);
+    },
+  );
+
+  testWidgets(
+    'search page shows retry on failure, and empty state only after success',
+    (tester) async {
+      await GStorage.putSetting(SettingsKeys.privateMode, true);
+      adapter.respond = (_) async => _json({}, status: 401);
+      final controller = SearchPageController(
+        CollectRepository(),
+        SearchHistoryRepository(),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: SearchPage(controller: controller)),
+      );
+      await tester.enterText(find.byType(TextField).first, '李熊猫');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('搜索请求失败'), findsOneWidget);
+      expect(find.text('没有找到番剧'), findsNothing);
+      adapter.respond = (_) async => _json({'data': []});
+      await tester.tap(find.text('重试搜索'));
+      await tester.pumpAndSettle();
+      expect(find.text('没有找到番剧'), findsOneWidget);
+      expect(find.text('搜索请求失败'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
 
-ResponseBody _json(Object data, {int status = 200}) => ResponseBody.fromString(
-      jsonEncode(data),
-      status,
-      headers: {
-        Headers.contentTypeHeader: [Headers.jsonContentType]
-      },
-    );
+Map<String, dynamic> _subject(int id, String name) => {
+  'id': id,
+  'type': 2,
+  'name': name,
+  'name_cn': '',
+  'date': '2026-07-29',
+  'rating': {'rank': 0, 'score': 6.0, 'total': 117},
+  'images': <String, String>{},
+  'tags': [],
+};
 
-ResponseBody _user([String username = 'saved-user']) => _json({
-      'id': 123,
-      'username': username,
-      'avatar': <String, String>{},
-    });
+ResponseBody _json(Object data, {int status = 200}) => ResponseBody.fromString(
+  jsonEncode(data),
+  status,
+  headers: {
+    Headers.contentTypeHeader: [Headers.jsonContentType],
+  },
+);
+
+ResponseBody _user([String username = 'saved-user']) =>
+    _json({'id': 123, 'username': username, 'avatar': <String, String>{}});
 
 class _BangumiAdapter implements HttpClientAdapter {
   final requests = <RequestOptions>[];
   Future<ResponseBody> Function(RequestOptions) respond = (_) async => _user();
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options,
-      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) {
     requests.add(options);
     return respond(options);
   }

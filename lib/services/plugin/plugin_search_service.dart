@@ -5,6 +5,7 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart';
 import 'package:kazumi/utils/async_session.dart';
+import 'package:kazumi/services/plugin/search_result_ranker.dart';
 
 class PluginSearchService {
   PluginSearchService({
@@ -20,6 +21,18 @@ class PluginSearchService {
   /// invalidates the write-back of the still-running previous one.
   final Map<String, AsyncSessionOwner> _querySessions = {};
   bool _isCancelled = false;
+  final Map<String, String> _keywords = {};
+
+  PluginSearchResponse _rank(PluginSearchResponse result, String keyword) {
+    final item = infoController.bangumiItem;
+    return PluginSearchResponse(
+      pluginName: result.pluginName,
+      data: rankSourceResults(
+        result.data,
+        titles: [item.nameCn, item.name, ...item.alias, keyword],
+      ),
+    );
+  }
 
   Future<void> querySource(String keyword, String pluginName) async {
     for (final plugin in pluginsController.pluginList) {
@@ -44,13 +57,16 @@ class PluginSearchService {
       if (plugin.name != pluginName) continue;
       final result = plugin.parseHarvestedSearch(html);
       if (result == null) return false;
+      _querySessions[pluginName]?.cancel();
       infoController.pluginSearchResponseList.removeWhere(
         (response) => response.pluginName == pluginName,
       );
       infoController.pluginSearchStatus[pluginName] =
           PluginSearchStatus.success;
       pluginsController.validityTracker.markSearchValid(pluginName);
-      infoController.pluginSearchResponseList.add(result);
+      infoController.pluginSearchResponseList.add(
+        _rank(result, _keywords[pluginName] ?? ''),
+      );
       return true;
     }
     return false;
@@ -65,13 +81,12 @@ class PluginSearchService {
       infoController.pluginSearchStatus[plugin.name] =
           PluginSearchStatus.pending;
     }
-    await Future.wait(
-      plugins.map((plugin) => _queryPlugin(plugin, keyword)),
-    );
+    await Future.wait(plugins.map((plugin) => _queryPlugin(plugin, keyword)));
   }
 
   Future<void> _queryPlugin(Plugin plugin, String keyword) async {
     if (_isCancelled) return;
+    _keywords[plugin.name] = keyword;
     final session = _querySessions
         .putIfAbsent(plugin.name, AsyncSessionOwner.new)
         .begin();
@@ -87,7 +102,7 @@ class PluginSearchService {
       if (result.data.isNotEmpty) {
         pluginsController.validityTracker.markSearchValid(plugin.name);
       }
-      infoController.pluginSearchResponseList.add(result);
+      infoController.pluginSearchResponseList.add(_rank(result, keyword));
     } catch (error) {
       if (_isCancelled || session.isStale) return;
       _handleSearchError(plugin, error);

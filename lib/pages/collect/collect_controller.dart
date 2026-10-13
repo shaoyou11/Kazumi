@@ -288,6 +288,8 @@ abstract class _CollectController with Store {
     try {
       await BangumiSyncService().syncCollectibles(onProgress: onProgress);
     } catch (e) {
+      // Earlier operations may have succeeded before a later request failed.
+      loadCollectibles();
       _reportSyncError(BangumiSyncService.describeError(e), onError, error: e);
       return false;
     }

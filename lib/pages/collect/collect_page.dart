@@ -16,6 +16,7 @@ import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/pages/collect/collect_library_view.dart';
 import 'package:kazumi/pages/collect/collect_sync_dialog.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/sync/bangumi_sync_service.dart';
 
 class CollectPage extends StatefulWidget {
   const CollectPage({
@@ -136,17 +137,47 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
       body: SafeArea(
         top: false,
         bottom: false,
-        child: Observer(
-          builder: (context) => CollectLibraryView(
-            entries: collectController.collectibles.toList(),
-            showRating: GStorage.getSetting(SettingsKeys.showRating),
-            layout: _layout,
-            onLayoutChanged: _changeLayout,
-            canEdit: (item) =>
-                !_syncDialogOpen && !_pendingIds.contains(item.id),
-            onOpen: (item) => context.pushNamed('/info/', arguments: item),
-            onChangeType: (item, type) => unawaited(_changeType(item, type)),
-          ),
+        child: Column(
+          children: [
+            ListenableBuilder(
+              listenable: BangumiSyncService(),
+              builder: (context, _) {
+                final sync = BangumiSyncService();
+                final report = sync.lastSyncReport;
+                if (!GStorage.getSetting(SettingsKeys.bangumiSyncEnable) ||
+                    report?.failed != true ||
+                    sync.isSyncing) {
+                  return const SizedBox.shrink();
+                }
+                return ListTile(
+                  leading: const Icon(Icons.sync_problem_rounded),
+                  title: Text(report!.summary),
+                  subtitle: Text(report.error!),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () async {
+                    await context.pushNamed('/settings/bangumi/');
+                    collectController.loadCollectibles();
+                  },
+                );
+              },
+            ),
+            Expanded(
+              child: Observer(
+                builder: (context) => CollectLibraryView(
+                  entries: collectController.collectibles.toList(),
+                  showRating: GStorage.getSetting(SettingsKeys.showRating),
+                  layout: _layout,
+                  onLayoutChanged: _changeLayout,
+                  canEdit: (item) =>
+                      !_syncDialogOpen && !_pendingIds.contains(item.id),
+                  onOpen: (item) =>
+                      context.pushNamed('/info/', arguments: item),
+                  onChangeType: (item, type) =>
+                      unawaited(_changeType(item, type)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

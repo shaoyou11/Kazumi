@@ -335,6 +335,7 @@ class BangumiApi {
         data: params,
       );
       final jsonList = jsonData['data'];
+      if (jsonList is! List) throw const FormatException('Invalid search response');
       for (dynamic jsonItem in jsonList) {
         if (jsonItem is Map<String, dynamic>) {
           try {
@@ -347,6 +348,9 @@ class BangumiApi {
                 .e('Network: resolve search results failed', error: e);
           }
         }
+      }
+      if (jsonList.isNotEmpty && bangumiList.isEmpty) {
+        throw const FormatException('Search results could not be parsed');
       }
       return BangumiSearchPage(
         items: bangumiList,

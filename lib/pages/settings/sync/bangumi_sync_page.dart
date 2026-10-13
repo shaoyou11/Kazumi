@@ -30,7 +30,7 @@ class _BangumiSyncPageState extends State<BangumiSyncPage> {
   bool _failed = false;
   double? _progress;
 
-  bool get _busy => _action != null || _bangumi.isConnecting;
+  bool get _busy => _action != null || _bangumi.isConnecting || _bangumi.isSyncing;
 
   @override
   void initState() {
@@ -158,6 +158,7 @@ class _BangumiSyncPageState extends State<BangumiSyncPage> {
               GStorage.getSetting(SettingsKeys.bangumiImmediateSyncToastEnable);
           final message =
               _message ?? (_tokenError == null ? _bangumi.lastError : null);
+          final report = _bangumi.lastSyncReport;
           return PopScope(
             canPop: !_busy,
             child: SettingsDetailScaffold(
@@ -172,6 +173,12 @@ class _BangumiSyncPageState extends State<BangumiSyncPage> {
                   ),
                   _accountCard(configured),
                   _syncControls(configured, enabled),
+                  if (report != null && !_busy)
+                    ListTile(
+                      leading: Icon(report.failed ? Icons.sync_problem_rounded : Icons.check_circle_outline_rounded),
+                      title: Text(report.summary),
+                      subtitle: report.error == null ? null : Text(report.error!),
+                    ),
                   StateActionButton(
                     onPressed: enabled && configured && !_busy ? _sync : null,
                     text: _action == _BangumiAction.sync ? '正在同步追番…' : '立即同步追番',

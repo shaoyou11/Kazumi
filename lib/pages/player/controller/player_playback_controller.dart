@@ -527,7 +527,7 @@ abstract class _PlayerPlaybackController with Store {
   Future<void> setPlaybackSpeed(double playerSpeed) async {
     this.playerSpeed = playerSpeed;
     try {
-      mediaPlayer!.setRate(playerSpeed);
+      await mediaPlayer!.setRate(playerSpeed);
     } catch (e) {
       KazumiLogger()
           .e('PlayerController: failed to set playback speed', error: e);

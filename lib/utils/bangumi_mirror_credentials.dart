@@ -4,3 +4,14 @@ const Map<String, String> bangumiMirrorCredentials = {
   'id': String.fromEnvironment('KAZUMI_APPID'),
   'value': String.fromEnvironment('KAZUMI_KEY'),
 };
+
+bool get hasBangumiMirrorCredentials =>
+    bangumiMirrorCredentials.values.every((value) => value.trim().isNotEmpty);
+
+bool isProtectedBangumiMirrorRequest(String method, String path) {
+  if (method == 'POST') return path == '/v0/search/subjects';
+  if (method != 'GET' || !path.endsWith('/comments')) return false;
+  return path.startsWith('/p1/subjects/') ||
+      path.startsWith('/p1/episodes/') ||
+      path.startsWith('/p1/characters/');
+}

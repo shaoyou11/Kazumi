@@ -15,6 +15,7 @@ import 'package:kazumi/pages/player/syncplay_sheet.dart';
 import 'package:kazumi/utils/constants.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/player/pip_utils.dart';
+import 'package:kazumi/services/player/playback_handoff.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:flutter/gestures.dart';
 import 'package:kazumi/pages/player/player_controller.dart';
@@ -140,35 +141,46 @@ class _PlayerItemState extends State<PlayerItem>
     if (_iosNativePlayback) return;
     final player = playerController.playback.mediaPlayer;
     if (player == null || playerController.videoUrl.isEmpty) return;
-    final wasPlaying = playerController.playback.playerPlaying;
+    final source = playerController.videoUrl;
+    final identity = videoPageController.currentHistoryIdentity;
+    final snapshot = PlaybackHandoffState(
+      position: playerController.playback.playerPosition,
+      rate: playerController.playback.playerSpeed,
+      playing: playerController.playback.playerPlaying,
+    );
+    final headers = Map<String, String>.of(playerController.playbackHeaders);
+    final referer = playerController.referer;
+    bool isCurrent() => mounted &&
+        identical(player, playerController.playback.mediaPlayer) &&
+        source == playerController.videoUrl &&
+        identity == videoPageController.currentHistoryIdentity;
     _iosNativePlayback = true;
     try {
-      await playerController.pause(enableSync: false);
-      final result = await const MethodChannel('com.shaoyou11.kazumit/player')
+      final succeeded = await handoffPlayback(
+        snapshot: snapshot,
+        isCurrent: isCurrent,
+        pause: () => playerController.pause(enableSync: false),
+        open: () => const MethodChannel('com.shaoyou11.kazumit/player')
           .invokeMapMethod<String, dynamic>('openPictureInPicture', {
-        'url': playerController.videoUrl,
-        'referer': playerController.referer,
-        'headers': playerController.playbackHeaders,
-        'position': playerController.playback.currentPosition.inMilliseconds / 1000.0,
-        'rate': playerController.playback.playerSpeed,
-        'playing': wasPlaying,
-      });
-      if (!mounted || !identical(player, playerController.playback.mediaPlayer)) return;
-      final seconds = (result?['position'] as num?)?.toDouble();
-      if (seconds != null && seconds.isFinite) {
-        final position = Duration(milliseconds: (seconds * 1000).round());
-        await playerController.seek(position, enableSync: false);
-        final identity = videoPageController.currentHistoryIdentity;
-        if (identity != null && identity.canRecord) {
-          historyController.updateHistory(identity, position, duration: playerController.playback.playerDuration);
-        }
-      }
-      if (result?['playing'] == true) await playerController.play(enableSync: false);
-    } on PlatformException catch (_) {
-      if (mounted && identical(player, playerController.playback.mediaPlayer)) {
-        if (wasPlaying) await playerController.play(enableSync: false);
+          'url': source, 'referer': referer, 'headers': headers,
+          'position': snapshot.position.inMilliseconds / 1000.0,
+          'rate': snapshot.rate, 'playing': snapshot.playing,
+        }),
+        seek: (position) => playerController.seek(position, enableSync: false),
+        setRate: playerController.playback.setPlaybackSpeed,
+        play: () => playerController.play(enableSync: false),
+        onPosition: (position) {
+          if (identity != null && identity.canRecord) {
+            historyController.updateHistory(identity, position,
+                duration: playerController.playback.playerDuration);
+          }
+        },
+      );
+      if (!succeeded && isCurrent()) {
         KazumiDialog.showToast(message: '此片源无法使用系统播放 / AirPlay，已恢复原播放器');
       }
+    } catch (_) {
+      if (isCurrent()) KazumiDialog.showToast(message: '恢复播放失败，请点击播放重试');
     } finally {
       _iosNativePlayback = false;
     }

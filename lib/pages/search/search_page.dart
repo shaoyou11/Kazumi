@@ -295,6 +295,7 @@ class _SearchPageState extends State<SearchPage> {
           Text(
               busy
                   ? '正在搜索…'
+                  : failed && allItems.isEmpty ? '搜索未完成'
                   : '${items.length} 部番剧${items.length < allItems.length ? ' · 隐藏 ${allItems.length - items.length} 部' : ''}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -310,6 +311,20 @@ class _SearchPageState extends State<SearchPage> {
       )),
       if (busy && allItems.isEmpty)
         const SliverToBoxAdapter(child: _SearchLoadingState())
+      else if (allItems.isEmpty && failed)
+        SliverToBoxAdapter(
+          child: GeneralEmptyState(
+            icon: Icons.wifi_off_rounded,
+            title: '搜索请求失败',
+            actions: [
+              StateActionButton.tonal(
+                onPressed: () => _submit(_submittedQuery!),
+                icon: Icons.refresh_rounded,
+                text: '重试搜索',
+              ),
+            ],
+          ),
+        )
       else if (allItems.isEmpty)
         const SliverToBoxAdapter(
           child: GeneralEmptyState(
@@ -352,7 +367,7 @@ class _SearchPageState extends State<SearchPage> {
                           ? TextButton.icon(
                               onPressed: _loadMore,
                               icon: const Icon(Icons.expand_more_rounded),
-                              label: const Text('加载更多'))
+                              label: Text(failed ? '加载失败，点击重试' : '加载更多'))
                           : Text('已经看到全部结果',
                               style: Theme.of(context)
                                   .textTheme

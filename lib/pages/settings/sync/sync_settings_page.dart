@@ -68,7 +68,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 onColor: colors.onSecondaryContainer,
                 status: bangumi.isConnecting
                     ? _SyncStatus.connecting
-                    : bangumi.lastError != null
+                    : bangumi.lastError != null || bangumi.lastSyncReport?.failed == true
                         ? _SyncStatus.connectionError
                         : !hasToken
                             ? _SyncStatus.unconnected

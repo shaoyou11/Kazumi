@@ -277,6 +277,10 @@ class SettingsKeys {
     '',
     group: SettingGroup.proxy,
   );
+  static const bangumiLastSyncReport = SettingKey<Map>(
+    'bangumiLastSyncReport', <String, dynamic>{},
+    group: SettingGroup.sync,
+  );
   static const enableSystemProxy = SettingKey<bool>(
     _SettingBoxKey.enableSystemProxy,
     false,
@@ -657,6 +661,7 @@ class SettingsKeys {
     bangumiSyncEnable,
     bangumiAccessToken,
     bangumiSyncPriority,
+    bangumiLastSyncReport,
     bangumiImmediateSyncToastEnable,
     brightnessVolumeGesture,
     historySyncDeviceId,

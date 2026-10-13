@@ -6,6 +6,7 @@ import 'package:kazumi/modules/bangumi/sync_priority.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/request/core/network_exception.dart';
 import 'package:kazumi/utils/async_serial_queue.dart';
+import 'package:kazumi/services/sync/bangumi_sync_report.dart';
 
 class BangumiSyncService extends ChangeNotifier {
   String _username = '';
@@ -22,6 +23,11 @@ class BangumiSyncService extends ChangeNotifier {
   String? get lastError => _lastError;
 
   final _operations = AsyncSerialQueue();
+  bool _isSyncing = false;
+  bool get isSyncing => _isSyncing;
+  BangumiSyncReport? get lastSyncReport => BangumiSyncReport.fromJson(
+    GStorage.getSetting(SettingsKeys.bangumiLastSyncReport),
+  );
 
   String get _configuredToken =>
       GStorage.getSetting(SettingsKeys.bangumiAccessToken).trim();
@@ -91,6 +97,12 @@ class BangumiSyncService extends ChangeNotifier {
       notifyListeners();
       try {
         final name = await _validateToken(token);
+        if (token != _configuredToken) {
+          await GStorage.putSetting(
+            SettingsKeys.bangumiLastSyncReport,
+            <String, dynamic>{},
+          );
+        }
         await GStorage.putSetting(SettingsKeys.bangumiAccessToken, token);
         _verifiedToken = token;
         _username = name;
@@ -134,10 +146,7 @@ class BangumiSyncService extends ChangeNotifier {
   Future<bool> syncCollectibleWhenIdle(int bangumiId, int localType) {
     return _operations.run(() async {
       if (!initialized) await _connectConfiguredToken();
-      return BangumiApi.updateBangumiByType(
-        bangumiId,
-        localType,
-      );
+      return BangumiApi.updateBangumiByType(bangumiId, localType);
     });
   }
 
@@ -155,6 +164,22 @@ class BangumiSyncService extends ChangeNotifier {
     void Function(String message, int current, int total)? onProgress,
   }) {
     return _operations.run(() async {
+      var syncedCount = 0;
+      var totalOperations = 0;
+      _isSyncing = true;
+      notifyListeners();
+      Future<void> saveReport([String? error]) async {
+        await GStorage.putSetting(
+          SettingsKeys.bangumiLastSyncReport,
+          BangumiSyncReport(
+            completed: syncedCount,
+            total: totalOperations,
+            finishedAt: DateTime.now(),
+            error: error,
+          ).toJson(),
+        );
+      }
+
       try {
         if (!GStorage.getSetting(SettingsKeys.bangumiSyncEnable)) {
           throw StateError('请先开启 Bangumi 同步');
@@ -177,14 +202,14 @@ class BangumiSyncService extends ChangeNotifier {
           remoteCollections: remoteCollection,
           priority: priority,
         );
-        final totalOperations = mergePlan.totalOperations;
+        totalOperations = mergePlan.totalOperations;
 
         if (totalOperations == 0) {
+          await saveReport();
           onProgress?.call('未发现状态差异，无需同步', 1, 1);
           return;
         }
 
-        int syncedCount = 0;
         if (mergePlan.localOnlyUploads.isNotEmpty) {
           onProgress?.call('正在上传本地新增状态', syncedCount, totalOperations);
           for (final upload in mergePlan.localOnlyUploads) {
@@ -212,7 +237,10 @@ class BangumiSyncService extends ChangeNotifier {
 
         if (mergePlan.conflictUploads.isNotEmpty) {
           onProgress?.call(
-              '${priority.label}：正在上传冲突状态', syncedCount, totalOperations);
+            '${priority.label}：正在上传冲突状态',
+            syncedCount,
+            totalOperations,
+          );
           for (final upload in mergePlan.conflictUploads) {
             final updated = await BangumiApi.updateBangumiByType(
               upload.bangumiId,
@@ -223,23 +251,37 @@ class BangumiSyncService extends ChangeNotifier {
             }
             syncedCount++;
             onProgress?.call(
-                '${priority.label}：正在上传冲突状态', syncedCount, totalOperations);
+              '${priority.label}：正在上传冲突状态',
+              syncedCount,
+              totalOperations,
+            );
           }
         }
         if (mergePlan.conflictLocalUpdates.isNotEmpty) {
           onProgress?.call(
-              '${priority.label}：正在更新本地冲突状态', syncedCount, totalOperations);
+            '${priority.label}：正在更新本地冲突状态',
+            syncedCount,
+            totalOperations,
+          );
           for (final mutation in mergePlan.conflictLocalUpdates) {
             await _applyLocalMutation(mutation);
             syncedCount++;
             onProgress?.call(
-                '${priority.label}：正在更新本地冲突状态', syncedCount, totalOperations);
+              '${priority.label}：正在更新本地冲突状态',
+              syncedCount,
+              totalOperations,
+            );
           }
         }
         onProgress?.call('Bangumi 状态同步完成', 1, 1);
+        await saveReport();
       } catch (e) {
+        await saveReport(describeError(e));
         KazumiLogger().e('Bangumi sync failed', error: e);
         rethrow;
+      } finally {
+        _isSyncing = false;
+        notifyListeners();
       }
     });
   }
