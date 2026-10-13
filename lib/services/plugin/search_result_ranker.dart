@@ -32,8 +32,9 @@ List<SearchItem> rankSourceResults(
             candidate.season != 1) {
           score *= 0.8;
         }
-        if (candidate.kind != null && !kinds.contains(candidate.kind))
+        if (candidate.kind != null && !kinds.contains(candidate.kind)) {
           score *= 0.6;
+        }
         if (kinds.isNotEmpty && candidate.kind == null) score *= 0.8;
         return (index: entry.key, item: entry.value, score: score);
       }).toList()..sort((a, b) {
@@ -98,8 +99,9 @@ class _Title {
     int? season;
     if (match != null) {
       season = _number(match[1] ?? match[2] ?? match[3]!);
-      if (season != null)
+      if (season != null) {
         title = title.replaceRange(match.start, match.end, '');
+      }
     }
     title = title.replaceAll(
       RegExp(r'剧场版|劇場版|特别篇|特別篇|\b(?:ova|oad|movie|special)\b'),

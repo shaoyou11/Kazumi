@@ -57,7 +57,6 @@ class PluginSearchService {
       if (plugin.name != pluginName) continue;
       final result = plugin.parseHarvestedSearch(html);
       if (result == null) return false;
-      _querySessions[pluginName]?.cancel();
       infoController.pluginSearchResponseList.removeWhere(
         (response) => response.pluginName == pluginName,
       );

@@ -366,8 +366,9 @@ void main() {
     var posts = 0;
     adapter.respond = (request) async {
       if (request.uri.path == '/v0/me') return _user();
-      if (request.method == 'POST')
+      if (request.method == 'POST') {
         return _json({}, status: ++posts == 2 ? 503 : 200);
+      }
       return _json({'data': [], 'total': 0, 'limit': 50});
     };
     await expectLater(bangumi.syncCollectibles(), throwsException);
@@ -408,7 +409,7 @@ void main() {
   testWidgets(
     'search page shows retry on failure, and empty state only after success',
     (tester) async {
-      await GStorage.putSetting(SettingsKeys.privateMode, true);
+      await tester.runAsync(() => GStorage.putSetting(SettingsKeys.privateMode, true));
       adapter.respond = (_) async => _json({}, status: 401);
       final controller = SearchPageController(
         CollectRepository(),
