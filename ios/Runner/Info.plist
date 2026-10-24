@@ -4,6 +4,19 @@
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>搜索同一网络内的电视和播放设备，用于投屏。</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.predidit.kazumi.navigation</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kazumi</string>
+			</array>
+		</dict>
+	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
