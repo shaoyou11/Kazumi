@@ -36,6 +36,7 @@ jobs:
       - name: 依赖与检查
         if: steps.source.outputs.build == 'true'
         run: |
+          python3 -m unittest discover -s scripts -p 'test_build_defines.py'
           flutter pub get
           flutter analyze --no-fatal-infos --fatal-warnings
           flutter test test/kazumit_gestures_test.dart test/source_result_ranker_test.dart test/playback_handoff_test.dart test/bangumi_sync_service_test.dart test/bangumi_search_params_test.dart test/collect_sync_test.dart test/search_parser_test.dart test/async_session_test.dart
@@ -43,8 +44,10 @@ jobs:
         if: steps.source.outputs.build == 'true'
         env:
           KAZUMIT_UPDATE_URL: ${{ secrets.KAZUMIT_UPDATE_URL }}
+          DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+          DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
         run: |
-          python3 -c 'import os,json;json.dump({"KAZUMIT_UPDATE_URL":os.environ.get("KAZUMIT_UPDATE_URL","")},open("build/defines.json","w"))'
+          python3 scripts/write-build-defines.py
           flutter build ios --release --no-codesign --build-number=$((300000 + GITHUB_RUN_NUMBER)) --dart-define-from-file=build/defines.json
           python3 scripts/package-custom-release.py
       - name: 发布与保存分支
