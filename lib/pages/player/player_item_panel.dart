@@ -429,7 +429,11 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
     final wasPlaying = playerController.playback.playing;
     final player = playerController.playback.mediaPlayer;
     await playerController.pause();
-    final connected = await RemotePlay().castVideo(playerController.videoUrl, playerController.referer);
+    final connected = await RemotePlay().castVideo(
+      playerController.videoUrl,
+      playerController.referer,
+      title: playerController.mediaTitle,
+    );
     if (mounted && !connected && wasPlaying && identical(player, playerController.playback.mediaPlayer)) {
       await playerController.play();
     }

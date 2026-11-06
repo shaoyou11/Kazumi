@@ -269,6 +269,11 @@ class SettingsKeys {
     true,
     group: SettingGroup.proxy,
   );
+  static const ruleRepositoryUrl = SettingKey<String>(
+    'ruleRepositoryUrl',
+    '',
+    group: SettingGroup.proxy,
+  );
   static const enableBangumiProxy = SettingKey<bool>(
     _SettingBoxKey.enableBangumiProxy,
     true,
@@ -629,6 +634,7 @@ class SettingsKeys {
     oledEnhance,
     displayMode,
     enableGitProxy,
+    ruleRepositoryUrl,
     enableBangumiProxy,
     imageAcceleration,
     bangumiAcceleration,

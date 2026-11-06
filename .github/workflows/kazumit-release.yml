@@ -39,7 +39,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_build_defines.py'
           flutter pub get
           flutter analyze --no-fatal-infos --fatal-warnings
-          flutter test test/kazumit_gestures_test.dart test/source_result_ranker_test.dart test/playback_handoff_test.dart test/bangumi_sync_service_test.dart test/bangumi_search_params_test.dart test/collect_sync_test.dart test/search_parser_test.dart test/async_session_test.dart
+          flutter test test/remote_play_test.dart test/kazumit_gestures_test.dart test/source_result_ranker_test.dart test/playback_handoff_test.dart test/bangumi_sync_service_test.dart test/bangumi_search_params_test.dart test/collect_sync_test.dart test/search_parser_test.dart test/async_session_test.dart
       - name: 编译 iOS 定制包
         if: steps.source.outputs.build == 'true'
         env:

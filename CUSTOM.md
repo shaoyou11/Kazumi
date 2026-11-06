@@ -37,3 +37,10 @@ GitHub Actions 定期检查官方正式版，合并成功并通过检查后构�
 - FVP 本次不接入。没有完成 iPhone 实机播放验收前，不增加备用内核入口或依赖。
 
 回归检查包含真实官方搜索（需显式开启 `RUN_LIVE_BANGUMI`）、无凭据镜像路由、搜索失败/空结果区分、季数排序、部分同步失败和重试、播放接力及过期结果。自动检查不能替代 iPhone 真机验收。
+
+## 同步官方 2.4.3
+
+- 保留 iOS 播放请求头、AirPlay/画中画入口，以及 DLNA 成功后暂停本地播放、取消或失败后恢复的行为。
+- DLNA 发送当前片源对应的番剧和剧集标题，按 AVTransport 服务筛选设备，兼容未声明 MediaRenderer 类型但支持投屏的设备。
+- 本地构建使用 `pubspec.yaml` 指定的 Flutter 3.47.9，最低 iOS 版本随该工具链迁移到 15.0。运行 `flutter pub get`、`flutter analyze --no-fatal-infos --fatal-warnings`、`flutter test` 和 Python 构建配置测试；投屏回归测试位于 `test/remote_play_test.dart`。
+- iOS Release 编译命令与 `.github/workflows/kazumit-release.yml` 一致。正式发布前必须通过 `scripts/write-build-defines.py` 注入弹幕授权，缺少配置时仅可作编译验证，不发布安装包。
