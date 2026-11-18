@@ -7,7 +7,10 @@ git fetch https://github.com/Predidit/Kazumi.git "refs/tags/$upstream_tag:refs/t
 git config user.name shaoyou11
 git config user.email shaoyou11@users.noreply.github.com
 if ! git merge-base --is-ancestor "refs/tags/official-$upstream_tag" HEAD; then
-  git merge --no-ff "refs/tags/official-$upstream_tag" -m "实现：合并官方 $upstream_tag 并保留 KazumiT 定制"
+  git merge --no-ff --no-commit "refs/tags/official-$upstream_tag"
+  # Keep the fork's workflow files unchanged when syncing the upstream app.
+  git restore --source=HEAD --staged --worktree -- .github/workflows
+  git commit -m "实现：合并官方 $upstream_tag 并保留 KazumiT 定制"
 fi
 for file in lib/pages/player/double_tap_seek.dart lib/services/update/kazumit_update.dart test/kazumit_gestures_test.dart; do
   test -s "$file" || { echo "定制文件缺失：$file"; exit 1; }
