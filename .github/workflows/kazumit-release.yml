@@ -31,7 +31,6 @@ jobs:
         if: steps.source.outputs.build == 'true'
         with:
           channel: stable
-          flutter-version-file: pubspec.yaml
           cache: true
       - name: 依赖与检查
         if: steps.source.outputs.build == 'true'
