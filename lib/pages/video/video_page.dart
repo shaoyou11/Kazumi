@@ -335,14 +335,14 @@ class _VideoPageState extends State<VideoPage>
                       : Observer(builder: (_) => _buildPlayerBody(layout)),
                 ),
               ),
-              tabs: tabBody,
+              tabs: _buildTabBody(),
               sidePanel: VideoSidePanel(
                 key: _sidePanelKey,
                 fullscreen: videoPageController.isFullscreen,
                 disableAnimations: disableAnimations,
                 onOpened: _revealCurrentEpisode,
                 onClosed: keyboardFocus.requestFocus,
-                child: tabBody,
+                child: _buildTabBody(onClose: _closeSidePanel),
               ),
             ),
           ),
@@ -519,10 +519,6 @@ class _VideoPageState extends State<VideoPage>
           selectedEpisode: videoPageController.selectedEpisode.episode,
           downloads: downloads,
           isOffline: videoPageController.isOfflineMode,
-          isPlaying: playerController.playback.playing &&
-              !playerController.playback.loading &&
-              !videoPageController.loading,
-          disableAnimations: disableAnimations,
           onEpisodeSelected: (episode, road) {
             if (episode == videoPageController.selectedEpisode.episode &&
                 road == videoPageController.selectedEpisode.road) {
@@ -541,33 +537,41 @@ class _VideoPageState extends State<VideoPage>
         );
       });
 
-  Widget get tabBody {
+  Widget _buildTabBody({VoidCallback? onClose}) {
     final int episodeNum = videoPageController.commentsEpisode;
 
-    return Builder(builder: (context) => ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          PlayerContentTabs(
-            controller: tabController,
-            onEpisodesSelected: _revealCurrentEpisode,
-          ),
-          Expanded(
-            child: TabBarView(
+    return Builder(builder: (context) {
+      final body = ColoredBox(
+        color: Theme.of(context).colorScheme.surface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PlayerContentTabs(
               controller: tabController,
-              children: [
-                episodePanel,
-                EpisodeCommentsSheet(
-                  episode: episodeNum,
-                  selection: videoPageController.selectedEpisode,
-                  videoPageController: videoPageController,
-                ),
-              ],
+              onEpisodesSelected: _revealCurrentEpisode,
+              onClose: onClose,
             ),
-          ),
-        ],
-      ),
-    ));
+            Expanded(
+              child: TabBarView(
+                controller: tabController,
+                children: [
+                  episodePanel,
+                  EpisodeCommentsSheet(
+                    episode: episodeNum,
+                    selection: videoPageController.selectedEpisode,
+                    videoPageController: videoPageController,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+      if (!disableAnimations) return body;
+      return MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: true),
+        child: body,
+      );
+    });
   }
 }
