@@ -3,6 +3,7 @@ import 'package:kazumi/pages/player/player_device_status.dart';
 
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -284,7 +285,12 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
               onSubmitted: (msg) {
                 unawaited(_submitDanmakuText(msg));
               },
-              onTapOutside: (_) {
+              onTapOutside: (event) {
+                // Only a primary press dismisses the composer and resumes.
+                if ((event.buttons & kPrimaryButton) == 0) {
+                  ContextMenuController.removeAny();
+                  return;
+                }
                 textFieldFocus.unfocus();
                 widget.keyboardFocus.requestFocus();
               },
